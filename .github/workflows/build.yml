@@ -1,0 +1,88 @@
+name: Auto Build
+
+# 🚀 触发条件：当向 main 分支 push 代码，且打上了类似 v1.0.0 的版本标签（Tag）时触发
+on:
+    push:
+        tags:
+            - "v*"
+
+jobs:
+    build:
+        name: Build on ${{ matrix.os }}
+        # 💡 矩阵策略：让 GitHub 同时启动 Windows、Ubuntu(Linux) 和 macOS 三台云端电脑
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                os: [ubuntu-latest, windows-latest, macos-latest]
+
+        steps:
+            # 1. 把你的 GitHub 仓库代码拉取到云端虚拟机里
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            # 2. 在云端配置好 Java 环境（Android 打包必备）
+            - name: Set up Java
+              uses: actions/setup-java@v4
+              with:
+                  distribution: "zulu"
+                  java-version: "21"
+
+            # 3. 在云端安装并配置 Flutter SDK
+            - name: Set up Flutter
+              uses: subosito/flutter-action@v2
+              with:
+                  channel: "stable"
+                  cache: true # 开启缓存，下次编译速度翻倍
+
+            # 4. 或者是恢复项目依赖
+            - name: Install dependencies
+              run: flutter pub get
+
+            # 5. 🏗️ 开始分平台条件编译
+            # --- Ubuntu 虚拟机：负责编译 Linux、Android 和 Web ---
+            - name: Build Linux, Android & Web (Ubuntu)
+              if: matrix.os == 'ubuntu-latest'
+              run: |
+                  # 编译 Linux 前需要安装一些必要的系统底层开发库
+                  sudo apt-get update
+                  sudo apt-get install -y ninja-build libgtk-3-dev
+                  flutter build linux --release
+                  flutter build apk --release
+                  flutter build web --release
+
+            # --- Windows 虚拟机：负责编译 Windows .exe ---
+            - name: Build Windows (Windows)
+              if: matrix.os == 'windows-latest'
+              run: flutter build windows --release
+
+            # --- macOS 虚拟机：负责编译 macOS App ---
+            - name: Build macOS (macOS)
+              if: matrix.os == 'macos-latest'
+              run: flutter build macos --release
+
+            # 6. 📦 把编译好的各种零散文件打包成规整的 .zip
+            - name: Zip Artifacts (Windows)
+              if: matrix.os == 'windows-latest'
+              run: Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath pdnode-todos-windows.zip
+
+            - name: Zip Artifacts (Linux)
+              if: matrix.os == 'ubuntu-latest'
+              run: |
+                  zip -r pdnode-todos-linux.zip build/linux/x64/release/bundle/*
+                  mv build/app/outputs/flutter-apk/app-release.apk pdnode-todos-android.apk
+                  zip -r pdnode-todos-web.zip build/web/*
+
+            - name: Zip Artifacts (macOS)
+              if: matrix.os == 'macos-latest'
+              run: zip -r pdnode-todos-macos.zip build/macos/Build/Products/Release/*.app
+
+            # 7. 🚀 终极合体：把 3 台电脑编译出来的所有全平台压缩包，统一上传并发布到 GitHub Release 页面
+            - name: Create GitHub Release
+              uses: softprops/action-gh-release@v2
+              if: startsWith(github.ref, 'refs/tags/')
+              with:
+                  files: |
+                      *.zip
+                      *.apk
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub 自动生成的临时安全令牌
