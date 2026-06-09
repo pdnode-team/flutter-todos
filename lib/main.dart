@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'todo_card.dart'; // 引入切分出去的卡片
@@ -42,8 +43,10 @@ class _TodoPageState extends State<TodoPage> {
     TodoItem(title: 'Create a new Todo'),
   ];
 
-  final TextEditingController _inputController = TextEditingController();
+  final TextEditingController _dialogTitleController = TextEditingController();
   final TextEditingController _editController = TextEditingController();
+
+  DateTime? _selectedDueDate;
 
   @override
   void initState() {
@@ -140,36 +143,157 @@ class _TodoPageState extends State<TodoPage> {
     );
   }
 
-  void _showEditDialog(int index) {
-    _editController.text = _todoList[index].title;
+  Future<DateTime?> _pickDate(
+    BuildContext context,
+    DateTime? initialDate,
+  ) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initialDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    return date;
+  }
+
+  void _showAddDialog() {
+    _dialogTitleController.clear();
+    _selectedDueDate = null;
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Update Todo'),
-        content: TextField(
-          controller: _editController,
-          decoration: const InputDecoration(hintText: 'Enter a new text...'),
-        ),
-        actions: [
-          TextButton(
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-            onPressed: () => Navigator.of(context).pop(),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add Todo'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _dialogTitleController,
+                decoration: const InputDecoration(
+                  hintText: 'Enter a new to-do item...',
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Text(
+                    _selectedDueDate != null
+                        ? 'Due: ${DateFormat('yyyy-MM-dd').format(_selectedDueDate!)}'
+                        : 'No due date',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    icon: const Icon(Icons.calendar_today, size: 18),
+                    label: const Text('Pick Date'),
+                    onPressed: () async {
+                      final date = await _pickDate(context, _selectedDueDate);
+                      if (date != null) {
+                        setDialogState(() => _selectedDueDate = date);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ],
           ),
-          TextButton(
-            child: const Text(
-              'Update',
-              style: TextStyle(color: Colors.blueAccent),
+          actions: [
+            TextButton(
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              onPressed: () => Navigator.of(dialogContext).pop(),
             ),
-            onPressed: () {
-              setState(() {
-                _todoList[index].title = _editController.text;
-                _editController.clear();
-              });
-              _saveTodos();
-              Navigator.of(context).pop();
-            },
+            TextButton(
+              child: const Text(
+                'Add',
+                style: TextStyle(color: Colors.deepPurple),
+              ),
+              onPressed: () {
+                if (_dialogTitleController.text.isNotEmpty) {
+                  setState(() {
+                    _todoList.add(
+                      TodoItem(
+                        title: _dialogTitleController.text,
+                        dueDate: _selectedDueDate,
+                      ),
+                    );
+                  });
+                  _saveTodos();
+                  Navigator.of(dialogContext).pop();
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditDialog(int index) {
+    _editController.text = _todoList[index].title;
+    DateTime? tempDueDate = _todoList[index].dueDate;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Update Todo'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _editController,
+                decoration: const InputDecoration(
+                  hintText: 'Enter a new text...',
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Text(
+                    tempDueDate != null
+                        ? 'Due: ${DateFormat('yyyy-MM-dd').format(tempDueDate!)}'
+                        : 'No due date',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    icon: const Icon(Icons.calendar_today, size: 18),
+                    label: const Text('Pick Date'),
+                    onPressed: () async {
+                      final date = await _pickDate(context, tempDueDate);
+                      if (date != null) {
+                        setDialogState(() => tempDueDate = date);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+          actions: [
+            TextButton(
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
+            TextButton(
+              child: const Text(
+                'Update',
+                style: TextStyle(color: Colors.blueAccent),
+              ),
+              onPressed: () {
+                if (_editController.text.isNotEmpty) {
+                  setState(() {
+                    _todoList[index].title = _editController.text;
+                    _todoList[index].dueDate = tempDueDate;
+                    _editController.clear();
+                  });
+                  _saveTodos();
+                  Navigator.of(dialogContext).pop();
+                }
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -247,58 +371,27 @@ class _TodoPageState extends State<TodoPage> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // 【上半部分】：输入区
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _inputController,
-                    decoration: const InputDecoration(
-                      hintText: 'Enter a new to-do item...',
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add, color: Colors.deepPurple),
-                  onPressed: () {
-                    if (_inputController.text.isNotEmpty) {
-                      setState(() {
-                        _todoList.add(TodoItem(title: _inputController.text));
-                        _inputController.clear();
-                      });
-                      _saveTodos();
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-
-          // 【下半部分】：精简后的核心组件
-          Expanded(
-            child: ListView.builder(
-              itemCount: _todoList.length,
-              itemBuilder: (context, index) {
-                // 🎯 核心看点：直接调用解耦后的 TodoCard，干净到无法自拔！
-                return TodoCard(
-                  item: _todoList[index],
-                  onCheckChanged: () {
-                    setState(
-                      () => _todoList[index].isDone = !_todoList[index].isDone,
-                    );
-                    _saveTodos();
-                  },
-                  onEditPressed: () => _showEditDialog(index),
-                  onDeletePressed: () => _showDeleteConfirmDialog(index),
-                );
-              },
-            ),
-          ),
-        ],
+      body: ListView.builder(
+        itemCount: _todoList.length,
+        itemBuilder: (context, index) {
+          // 🎯 核心看点：直接调用解耦后的 TodoCard，干净到无法自拔！
+          return TodoCard(
+            item: _todoList[index],
+            onCheckChanged: () {
+              setState(
+                () => _todoList[index].isDone = !_todoList[index].isDone,
+              );
+              _saveTodos();
+            },
+            onEditPressed: () => _showEditDialog(index),
+            onDeletePressed: () => _showDeleteConfirmDialog(index),
+          );
+        },
+      ),
+      // 右下角悬浮的 + 号
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddDialog,
+        child: const Icon(Icons.add),
       ),
     );
   }

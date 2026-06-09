@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import 'todo_item.dart';
 
@@ -28,7 +29,7 @@ class TodoCard extends StatelessWidget {
           value: item.isDone,
           onChanged: (bool? _) => onCheckChanged(),
         ),
-        // 中间：文字
+        // 中间：文字 + 到期时间
         title: Text(
           item.title,
           style: TextStyle(
@@ -37,6 +38,17 @@ class TodoCard extends StatelessWidget {
             color: item.isDone ? Colors.grey : Colors.black87,
           ),
         ),
+        subtitle: item.dueDate != null
+            ? Text(
+                'Due: ${DateFormat('yyyy-MM-dd').format(item.dueDate!)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: item.dueDate!.isBefore(DateTime.now()) && !item.isDone
+                      ? Colors.redAccent
+                      : Colors.grey,
+                ),
+              )
+            : null,
         // 右边：多个动作按钮（Row 闭环）
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
