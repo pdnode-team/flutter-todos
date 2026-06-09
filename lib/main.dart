@@ -122,6 +122,45 @@ class _TodoPageState extends State<TodoPage> {
     );
   }
 
+  void _showEditDialog(int index) {
+    _editController.text = _todoList[index].title;
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Update Todo'),
+          // 💡 动态展示：你可以直接在文案里引用传进来的参数，获取当前这条任务的标题
+          content: TextField(
+            controller: _editController,
+            decoration: const InputDecoration(hintText: 'Enter a new text...'),
+          ),
+          actions: [
+            TextButton(
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              onPressed: () => Navigator.of(context).pop(), // 一行搞定关闭
+            ),
+            TextButton(
+              child: const Text(
+                'Update',
+                style: TextStyle(color: Colors.blueAccent),
+              ),
+              onPressed: () {
+                // 💡 业务逻辑：精准删除传进来的那一条
+                setState(() {
+                  _todoList[index].title = _editController.text;
+                  _editController.text = "";
+                });
+                _saveTodos(); // 同步进硬盘
+                Navigator.of(context).pop(); // 关闭弹窗
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   // Flutter 组件的生命周期函数：当页面一打开，就自动去读文件
   @override
   void initState() {
@@ -135,6 +174,7 @@ class _TodoPageState extends State<TodoPage> {
   ];
 
   final TextEditingController _inputController = TextEditingController();
+  final TextEditingController _editController = TextEditingController();
 
   void _showSettingsDialog() {
     showDialog(
@@ -283,18 +323,29 @@ class _TodoPageState extends State<TodoPage> {
                       ),
                     ),
                     // 右边：红色的删除垃圾桶
-                    trailing: IconButton(
-                      icon: const Icon(
-                        Icons.delete_outline,
-                        color: Colors.redAccent,
-                      ),
-                      onPressed: () {
-                        // setState(() {
-                        //   _todoList.removeAt(index); // 从数组中剔除
-                        // });
-                        // _saveTodosToFile();
-                        _showDeleteConfirmDialog(index);
-                      },
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          onPressed: () {
+                            _showEditDialog(index);
+                          },
+                          icon: Icon(Icons.edit),
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.redAccent,
+                          ),
+                          onPressed: () {
+                            // setState(() {
+                            //   _todoList.removeAt(index); // 从数组中剔除
+                            // });
+                            // _saveTodosToFile();
+                            _showDeleteConfirmDialog(index);
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 );
